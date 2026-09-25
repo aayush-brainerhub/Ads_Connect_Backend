@@ -1,0 +1,113 @@
+# =========================================================
+# AdsConnect Backend - ASP.NET Core / Visual Studio
+# =========================================================
+
+# Visual Studio / Rider / VS Code user files
+.vs/
+.idea/
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.DotSettings.user
+
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+artifacts/
+bld/
+publish/
+out/
+
+# .NET / MSBuild
+project.lock.json
+project.fragment.lock.json
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+
+# Logs
+*.log
+[Ll]og/
+[Ll]ogs/
+
+# Test results / coverage
+[Tt]est[Rr]esult*/
+TestResult.xml
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+OpenCover/
+BenchmarkDotNet.Artifacts/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+secrets.json
+secrets.*.json
+
+# Local ASP.NET configuration (may contain connection strings)
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.Local.json
+
+# Local database files
+*.mdf
+*.ldf
+*.ndf
+*.db
+*.sqlite
+*.sqlite3
+
+# Certificates / private keys
+*.pfx
+*.p12
+*.key
+*.pem
+
+# Azure / publish credentials
+*.pubxml
+*.publishproj
+PublishScripts/
+*.publishsettings
+*.azurePubxml
+
+# Generated / temporary
+*.tmp
+*.tmp_proj
+*.bak
+*.backup
+*.old
+~$*
+*~
+*.VC.db
+*.VC.VC.opendb
+
+# Uploaded avatars (served from wwwroot)
+ProfileImages/
+Uploads/
+wwwroot/uploads/
+wwwroot/ProfileImages/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local scratch notes
+ids.txt
+
+# Keep example config files
+!appsettings.example.json
+!.env.example

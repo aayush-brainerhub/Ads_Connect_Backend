@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>AdsConnect.data</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="13.0.1" />
+    <!-- Password digests. PMS hashes with BCrypt too, so the two AppUser/User
+         tables stay readable with the same tooling. -->
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="7.0.20" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="7.0.20">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <!-- AdsConnect is PostgreSQL, unlike PMS which uses SQL Server. -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="7.0.18" />
+    <!-- Pinned explicitly: Npgsql 7.0.18 pulls EF Relational 7.0.18 while the EF Core
+         reference above brings 7.0.20, which MSBuild reports as an MSB3277 conflict. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="7.0.20" />
+  </ItemGroup>
+
+</Project>
