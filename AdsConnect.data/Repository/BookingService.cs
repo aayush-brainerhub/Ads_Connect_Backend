@@ -22,6 +22,8 @@ namespace AdsConnect.data.Repository
                         .ThenInclude(cr => cr.Campaign)
                             .ThenInclude(c => c.Advertiser)
                 .Include(p => p.ProposalItems)
+                    .ThenInclude(i => i.Inventory)
+                        .ThenInclude(inv => inv!.Channel)
                 .AsQueryable();
 
             if (role == "Provider")
@@ -41,6 +43,11 @@ namespace AdsConnect.data.Repository
                 .OrderByDescending(p => p.CreatedDate)
                 .ToListAsync();
 
+            var providerIds = proposals.Select(p => p.ProviderId).Distinct().ToList();
+            var providerNames = await _context.Providers
+                .Where(p => providerIds.Contains(p.ProviderId))
+                .ToDictionaryAsync(p => p.ProviderId, p => p.ProviderName);
+
             return proposals.Select(p => new ProposalDto
             {
                 id = p.ProposalId,
@@ -48,7 +55,7 @@ namespace AdsConnect.data.Repository
                 campaignTitle = p.CampaignProviderRequest?.CampaignRequirement?.Campaign?.CampaignName ?? "Campaign Request",
                 advertiserName = p.CampaignProviderRequest?.CampaignRequirement?.Campaign?.Advertiser?.BusinessName ?? "Advertiser",
                 providerId = p.ProviderId,
-                providerName = "Provider",
+                providerName = providerNames.GetValueOrDefault(p.ProviderId) ?? string.Empty,
                 version = p.Version,
                 description = p.Description ?? string.Empty,
                 deliverablesSummary = p.Deliverables ?? string.Empty,
@@ -70,7 +77,7 @@ namespace AdsConnect.data.Repository
                     id = i.ProposalItemId,
                     proposalId = i.ProposalId,
                     inventoryId = i.InventoryId,
-                    channelName = "Advertising Channel",
+                    channelName = i.Inventory?.Channel?.ChannelName ?? string.Empty,
                     description = i.Description ?? string.Empty,
                     quantity = (int)i.Quantity,
                     unitPrice = i.UnitPrice,
@@ -297,6 +304,16 @@ namespace AdsConnect.data.Repository
                 .OrderByDescending(b => b.BookedDate)
                 .ToListAsync();
 
+            var advertiserIds = bookings.Select(b => b.AdvertiserId).Distinct().ToList();
+            var advertiserNames = await _context.Advertisers
+                .Where(a => advertiserIds.Contains(a.AdvertiserId))
+                .ToDictionaryAsync(a => a.AdvertiserId, a => a.BusinessName);
+
+            var bookingProviderIds = bookings.Select(b => b.ProviderId).Distinct().ToList();
+            var providerNames = await _context.Providers
+                .Where(p => bookingProviderIds.Contains(p.ProviderId))
+                .ToDictionaryAsync(p => p.ProviderId, p => p.ProviderName);
+
             return bookings.Select(b => new BookingDto
             {
                 id = b.BookingId,
@@ -305,9 +322,9 @@ namespace AdsConnect.data.Repository
                 campaignId = b.CampaignId,
                 campaignTitle = b.Campaign?.CampaignName ?? "Campaign",
                 advertiserId = b.AdvertiserId,
-                advertiserName = "Advertiser",
+                advertiserName = advertiserNames.GetValueOrDefault(b.AdvertiserId) ?? string.Empty,
                 providerId = b.ProviderId,
-                providerName = "Provider",
+                providerName = providerNames.GetValueOrDefault(b.ProviderId) ?? string.Empty,
                 totalAmount = b.TotalAmount,
                 platformFeeAmount = b.PlatformFeeAmount,
                 taxAmount = b.TaxAmount,
@@ -328,7 +345,8 @@ namespace AdsConnect.data.Repository
                     unitPrice = i.UnitPrice,
                     quantity = (int)i.Quantity,
                     totalPrice = i.TotalPrice ?? (i.Quantity * i.UnitPrice),
-                    status = "Scheduled",
+                    // BookingItem has no status column; nothing is reported rather than a made-up one.
+                    status = string.Empty,
                 }).ToList(),
                 deliverables = b.CampaignDeliverables.Select(d => new CampaignDeliverableDto
                 {

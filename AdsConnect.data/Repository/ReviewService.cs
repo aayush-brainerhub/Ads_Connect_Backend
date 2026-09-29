@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 using AdsConnect.data.Dtos;
 using AdsConnect.data.Interface;
@@ -71,13 +70,7 @@ namespace AdsConnect.data.Repository
                 responseText = r.ResponseText,
                 responseDate = r.ResponseDate?.ToString("yyyy-MM-dd"),
                 createdDate = r.CreatedDate.ToString("yyyy-MM-dd"),
-                criteriaRatings = new CriteriaRatingsDto
-                {
-                    communication = 5,
-                    deliverySpeed = 5,
-                    quality = 5,
-                    valueForMoney = 4,
-                },
+                criteriaRatings = ParseCriteria(r.CriteriaRatings),
             }).ToList();
         }
 
@@ -85,162 +78,52 @@ namespace AdsConnect.data.Repository
         {
             try
             {
+                const string NoCompletedBooking = "You can only review a provider after a completed booking.";
+
+                // A review must hang off a real, completed booking between this
+                // advertiser and the provider. Nothing is created here to make one up.
                 var advertiser = await _context.Advertisers.FirstOrDefaultAsync(a => a.UserId == advertiserUserId);
                 if (advertiser == null)
                 {
-                    var user = await _context.AppUsers.FindAsync(advertiserUserId);
-                    advertiser = new Advertiser
-                    {
-                        AdvertiserId = Guid.NewGuid(),
-                        UserId = advertiserUserId,
-                        BusinessName = user != null ? $"{user.FirstName} {user.LastName}".Trim() : "Advertiser Brand",
-                        IsActive = true,
-                        CreatedDate = DateTime.UtcNow
-                    };
-                    _context.Advertisers.Add(advertiser);
-                    await _context.SaveChangesAsync();
+                    return (false, NoCompletedBooking, null);
                 }
 
-                Booking? booking = null;
-                if (dto.bookingId.HasValue && dto.bookingId.Value != Guid.Empty)
+                var hasBookingId = dto.bookingId.HasValue && dto.bookingId.Value != Guid.Empty;
+                var hasProviderId = dto.providerId.HasValue && dto.providerId.Value != Guid.Empty;
+
+                if (!hasBookingId && !hasProviderId)
                 {
-                    booking = await _context.Bookings
-                        .Include(b => b.Campaign)
-                        .FirstOrDefaultAsync(b => b.BookingId == dto.bookingId.Value);
+                    return (false, "Choose the booking or provider you want to review.", null);
                 }
+
+                var bookings = _context.Bookings
+                    .Include(b => b.Campaign)
+                    .Where(b => b.AdvertiserId == advertiser.AdvertiserId && b.Status == "Completed");
+
+                if (hasBookingId)
+                {
+                    bookings = bookings.Where(b => b.BookingId == dto.bookingId!.Value);
+                }
+
+                if (hasProviderId)
+                {
+                    bookings = bookings.Where(b => b.ProviderId == dto.providerId!.Value);
+                }
+
+                var booking = await bookings
+                    .OrderByDescending(b => b.CompletedDate ?? b.CreatedDate)
+                    .FirstOrDefaultAsync();
 
                 if (booking == null)
                 {
-                    booking = await _context.Bookings
-                        .Include(b => b.Campaign)
-                        .FirstOrDefaultAsync(b => b.AdvertiserId == advertiser.AdvertiserId);
-                }
-
-                if (booking == null)
-                {
-                    Provider? provider = null;
-                    if (dto.providerId.HasValue && dto.providerId.Value != Guid.Empty)
-                    {
-                        provider = await _context.Providers.FindAsync(dto.providerId.Value);
-                    }
-                    provider ??= await _context.Providers.FirstOrDefaultAsync();
-
-                    if (provider == null)
-                    {
-                        provider = new Provider
-                        {
-                            ProviderId = Guid.NewGuid(),
-                            ProviderName = "Featured Media Creator",
-                            IsActive = true,
-                            AcceptsRequests = true,
-                            CreatedDate = DateTime.UtcNow
-                        };
-                        _context.Providers.Add(provider);
-                        await _context.SaveChangesAsync();
-                    }
-
-                    var channel = await _context.AdvertisingChannels.FirstOrDefaultAsync();
-                    if (channel == null)
-                    {
-                        channel = new AdvertisingChannel
-                        {
-                            ChannelId = Guid.NewGuid(),
-                            ChannelName = "Digital & Social Media",
-                            Category = "Digital",
-                            IsActive = true,
-                            CreatedDate = DateTime.UtcNow
-                        };
-                        _context.AdvertisingChannels.Add(channel);
-                        await _context.SaveChangesAsync();
-                    }
-
-                    var campaign = await _context.Campaigns.FirstOrDefaultAsync(c => c.AdvertiserId == advertiser.AdvertiserId);
-                    if (campaign == null)
-                    {
-                        campaign = new Campaign
-                        {
-                            CampaignId = Guid.NewGuid(),
-                            AdvertiserId = advertiser.AdvertiserId,
-                            CampaignName = "Campaign Endorsement",
-                            Status = "Active",
-                            Currency = "INR",
-                            Budget = 50000,
-                            Objective = "Awareness",
-                            CreatedDate = DateTime.UtcNow
-                        };
-                        _context.Campaigns.Add(campaign);
-                        await _context.SaveChangesAsync();
-                    }
-
-                    var requirement = new CampaignRequirement
-                    {
-                        CampaignRequirementId = Guid.NewGuid(),
-                        CampaignId = campaign.CampaignId,
-                        ChannelId = channel.ChannelId,
-                        Title = "Media Execution Deliverable",
-                        Status = "Open",
-                        Currency = "INR",
-                        Specs = "{}",
-                        Quantity = 1,
-                        CreatedDate = DateTime.UtcNow
-                    };
-                    _context.CampaignRequirements.Add(requirement);
-                    await _context.SaveChangesAsync();
-
-                    var req = new CampaignProviderRequest
-                    {
-                        RequestId = Guid.NewGuid(),
-                        CampaignId = campaign.CampaignId,
-                        CampaignRequirementId = requirement.CampaignRequirementId,
-                        ProviderId = provider.ProviderId,
-                        RequestedBy = advertiserUserId,
-                        Status = "Accepted",
-                        RequestDate = DateTime.UtcNow.AddDays(-20),
-                        CreatedDate = DateTime.UtcNow.AddDays(-20)
-                    };
-                    _context.CampaignProviderRequests.Add(req);
-                    await _context.SaveChangesAsync();
-
-                    var proposal = new Proposal
-                    {
-                        ProposalId = Guid.NewGuid(),
-                        RequestId = req.RequestId,
-                        ProviderId = provider.ProviderId,
-                        Status = "Accepted",
-                        Subtotal = 50000,
-                        TaxAmount = 9000,
-                        Currency = "INR",
-                        CreatedDate = DateTime.UtcNow.AddDays(-18)
-                    };
-                    _context.Proposals.Add(proposal);
-                    await _context.SaveChangesAsync();
-
-                    booking = new Booking
-                    {
-                        BookingId = Guid.NewGuid(),
-                        BookingNumber = $"BK-{DateTime.UtcNow.Year}-{Random.Shared.Next(100000, 999999)}",
-                        ProposalId = proposal.ProposalId,
-                        ProviderId = provider.ProviderId,
-                        CampaignId = campaign.CampaignId,
-                        AdvertiserId = advertiser.AdvertiserId,
-                        StartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-15)),
-                        EndDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),
-                        Status = "Completed",
-                        TotalAmount = 59000,
-                        PlatformFeeAmount = 5000,
-                        TaxAmount = 9000,
-                        ProviderPayout = 45000,
-                        Currency = "INR",
-                        CreatedDate = DateTime.UtcNow,
-                        BookedDate = DateTime.UtcNow.AddDays(-15)
-                    };
-                    _context.Bookings.Add(booking);
-                    await _context.SaveChangesAsync();
+                    return (false, NoCompletedBooking, null);
                 }
 
                 var providerObj = await _context.Providers.FindAsync(booking.ProviderId);
 
-                var review = await _context.Reviews.FirstOrDefaultAsync(r => r.BookingId == booking.BookingId && r.Direction == "AdvertiserToProvider");
+                var review = await _context.Reviews
+                    .AsTracking()
+                    .FirstOrDefaultAsync(r => r.BookingId == booking.BookingId && r.Direction == "AdvertiserToProvider");
                 if (review == null)
                 {
                     review = new Review
@@ -254,7 +137,7 @@ namespace AdsConnect.data.Repository
                         Rating = dto.rating,
                         Title = dto.title,
                         ReviewText = dto.reviewText,
-                        CriteriaRatings = "{}",
+                        CriteriaRatings = SerializeCriteria(dto.criteriaRatings),
                         IsPublished = true,
                         CreatedDate = DateTime.UtcNow,
                     };
@@ -265,6 +148,7 @@ namespace AdsConnect.data.Repository
                     review.Rating = dto.rating;
                     review.Title = dto.title;
                     review.ReviewText = dto.reviewText;
+                    review.CriteriaRatings = SerializeCriteria(dto.criteriaRatings);
                     review.UpdatedDate = DateTime.UtcNow;
                     review.IsPublished = true;
                 }
@@ -275,22 +159,20 @@ namespace AdsConnect.data.Repository
                 {
                     id = review.ReviewId,
                     bookingId = review.BookingId,
-                    bookingNumber = booking.BookingNumber ?? "BK-2026-001",
+                    bookingNumber = booking.BookingNumber,
                     campaignTitle = booking.Campaign?.CampaignName ?? "Campaign",
                     direction = review.Direction,
+                    reviewerRole = "Advertiser",
+                    providerId = review.ProviderId,
                     providerName = providerObj?.ProviderName ?? "Provider",
+                    advertiserId = review.AdvertiserId,
+                    advertiserName = advertiser.BusinessName,
                     rating = review.Rating,
                     title = review.Title ?? string.Empty,
                     reviewText = review.ReviewText ?? string.Empty,
                     isPublished = review.IsPublished,
                     createdDate = review.CreatedDate.ToString("yyyy-MM-dd"),
-                    criteriaRatings = new CriteriaRatingsDto
-                    {
-                        communication = 5,
-                        deliverySpeed = 5,
-                        quality = 5,
-                        valueForMoney = 4,
-                    }
+                    criteriaRatings = ParseCriteria(review.CriteriaRatings),
                 });
             }
             catch (Exception ex)
@@ -315,7 +197,7 @@ namespace AdsConnect.data.Repository
             return (true, "Response posted successfully.");
         }
 
-        public async Task<(bool updated, string message)> TogglePublishService(Guid reviewId)
+        public async Task<(bool updated, string message)> TogglePublishService(Guid adminUserId, Guid reviewId)
         {
             var review = await _context.Reviews.FindAsync(reviewId);
             if (review == null)
@@ -330,19 +212,48 @@ namespace AdsConnect.data.Repository
             _context.AuditLogs.Add(new AuditLog
             {
                 AuditLogId = Guid.NewGuid(),
+                UserId = adminUserId,
                 EntityName = "Review",
                 EntityId = review.ReviewId,
                 UserRole = "Admin",
                 Action = review.IsPublished ? "APPROVE" : "REJECT",
                 OldValues = JsonSerializer.Serialize(new { isPublished = oldStatus }),
                 NewValues = JsonSerializer.Serialize(new { isPublished = review.IsPublished }),
-                IpAddress = IPAddress.Parse("127.0.0.1"),
-                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AdsConnectAdmin/2.4",
+                // No request context reaches this layer, so the caller's IP and user
+                // agent are unknown; they are left empty rather than invented.
+                IpAddress = null,
+                UserAgent = null,
                 CreatedDate = DateTime.UtcNow
             });
 
             await _context.SaveChangesAsync();
             return (true, review.IsPublished ? "Review published." : "Review hidden.");
+        }
+
+        private static string SerializeCriteria(CriteriaRatingsDto? criteria) =>
+            criteria == null ? "{}" : JsonSerializer.Serialize(criteria);
+
+        /// <summary>
+        /// Returns the per-criterion ratings the reviewer actually gave, or null when
+        /// none were submitted (stored as "{}"), instead of showing default scores.
+        /// </summary>
+        private static CriteriaRatingsDto? ParseCriteria(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return null;
+
+            try
+            {
+                var criteria = JsonSerializer.Deserialize<CriteriaRatingsDto>(json);
+                if (criteria == null) return null;
+
+                var anyGiven = criteria.communication > 0 || criteria.deliverySpeed > 0
+                    || criteria.quality > 0 || criteria.valueForMoney > 0;
+                return anyGiven ? criteria : null;
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
         }
     }
 }

@@ -49,9 +49,9 @@ namespace AdsConnect.api.Controllers
         [HttpPut("TogglePublish/{reviewId}")]
         [Authorize(Roles = "Admin")]
         public Task<ActionResult> TogglePublish(Guid reviewId) =>
-            ForCurrentUser<string>(async _ =>
+            ForCurrentUser<string>(async userId =>
             {
-                var (updated, message) = await _reviewService.TogglePublishService(reviewId);
+                var (updated, message) = await _reviewService.TogglePublishService(userId, reviewId);
                 return updated ? Success(message, message) : Failure<string>(message);
             });
     }

@@ -169,7 +169,7 @@ namespace AdsConnect.data.Repository
                         ChannelId = Guid.NewGuid(),
                         ChannelName = dto.name.Trim(),
                         Category = string.IsNullOrWhiteSpace(dto.subCategory) ? "Digital" : dto.subCategory.Trim(),
-                        Description = dto.description?.Trim() ?? $"{dto.name} channel",
+                        Description = string.IsNullOrWhiteSpace(dto.description) ? null : dto.description.Trim(),
                         IsActive = true,
                         CreatedDate = DateTime.UtcNow,
                     };
@@ -192,7 +192,9 @@ namespace AdsConnect.data.Repository
                     {
                         LocationId = Guid.NewGuid(),
                         City = dto.name.Trim(),
-                        State = dto.state?.Trim() ?? (dto.subCategory?.Trim() ?? "General"),
+                        State = !string.IsNullOrWhiteSpace(dto.state) ? dto.state.Trim()
+                            : !string.IsNullOrWhiteSpace(dto.subCategory) ? dto.subCategory.Trim()
+                            : null,
                         Country = "India",
                         IsActive = true,
                         CreatedDate = DateTime.UtcNow,
@@ -205,7 +207,7 @@ namespace AdsConnect.data.Repository
                     {
                         ProviderTypeId = Guid.NewGuid(),
                         Name = dto.name.Trim(),
-                        Description = dto.description?.Trim() ?? $"{dto.name} creator profile",
+                        Description = string.IsNullOrWhiteSpace(dto.description) ? null : dto.description.Trim(),
                         IsActive = true,
                         CreatedDate = DateTime.UtcNow,
                     };
@@ -232,7 +234,7 @@ namespace AdsConnect.data.Repository
                     {
                         RoleId = Guid.NewGuid(),
                         RoleName = dto.name.Trim(),
-                        Description = dto.description?.Trim() ?? $"{dto.name} system role",
+                        Description = string.IsNullOrWhiteSpace(dto.description) ? null : dto.description.Trim(),
                         IsActive = true,
                         CreatedDate = DateTime.UtcNow,
                     };

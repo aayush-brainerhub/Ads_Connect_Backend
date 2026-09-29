@@ -105,7 +105,7 @@ namespace AdsConnect.data.Dtos
         public Guid invoiceId { get; set; }
 
         [Required]
-        public string paymentMethod { get; set; } = "Stripe";
+        public string paymentMethod { get; set; } = string.Empty;
 
         public string? notes { get; set; }
     }

@@ -4,10 +4,10 @@ namespace AdsConnect.data.Dtos
 {
     public class CriteriaRatingsDto
     {
-        public int communication { get; set; } = 5;
-        public int deliverySpeed { get; set; } = 5;
-        public int quality { get; set; } = 5;
-        public int valueForMoney { get; set; } = 5;
+        public int communication { get; set; }
+        public int deliverySpeed { get; set; }
+        public int quality { get; set; }
+        public int valueForMoney { get; set; }
     }
 
     public class ReviewDto
@@ -26,7 +26,7 @@ namespace AdsConnect.data.Dtos
         public short rating { get; set; }
         public string title { get; set; } = string.Empty;
         public string reviewText { get; set; } = string.Empty;
-        public CriteriaRatingsDto criteriaRatings { get; set; } = new();
+        public CriteriaRatingsDto? criteriaRatings { get; set; }
         public bool isPublished { get; set; }
         public string? responseText { get; set; }
         public string? responseDate { get; set; }

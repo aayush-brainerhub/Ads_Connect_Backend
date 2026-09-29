@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 using AdsConnect.data.Dtos;
 using AdsConnect.data.Interface;
@@ -23,7 +22,7 @@ namespace AdsConnect.data.Repository
                 .SumAsync(b => (decimal?)b.TotalAmount) ?? 0m;
 
             var platformRevenue = await _context.PlatformFees
-                .SumAsync(f => (decimal?)f.CalculatedAmount) ?? (grossGMV * 0.10m);
+                .SumAsync(f => (decimal?)f.CalculatedAmount) ?? 0m;
 
             var netPayouts = await _context.Bookings
                 .Where(b => b.Status == "Completed")
@@ -53,54 +52,6 @@ namespace AdsConnect.data.Repository
 
         public async Task<List<InvoiceDto>> GetInvoicesService(Guid userId, string role)
         {
-            var bookingsWithoutInvoices = await _context.Bookings
-                .Include(b => b.Invoices)
-                .Where(b => !b.Invoices.Any())
-                .ToListAsync();
-
-            foreach (var b in bookingsWithoutInvoices)
-            {
-                var invoice = new Invoice
-                {
-                    InvoiceId = Guid.NewGuid(),
-                    InvoiceNumber = $"INV-{DateTime.UtcNow.Year}-{Random.Shared.Next(100000, 999999)}",
-                    BookingId = b.BookingId,
-                    AdvertiserId = b.AdvertiserId,
-                    ProviderId = b.ProviderId,
-                    Direction = "PlatformToAdvertiser",
-                    Subtotal = b.TotalAmount - b.TaxAmount,
-                    TaxAmount = b.TaxAmount,
-                    TotalAmount = b.TotalAmount,
-                    AmountPaid = b.Status == "Completed" ? b.TotalAmount : 0,
-                    Status = b.Status == "Completed" ? "Paid" : "Issued",
-                    Currency = b.Currency ?? "INR",
-                    BillingSnapshot = "{}",
-                    IssuedDate = b.CreatedDate,
-                    DueDate = DateOnly.FromDateTime(b.CreatedDate.AddDays(15)),
-                    PaidDate = b.Status == "Completed" ? b.CreatedDate.AddDays(1) : null,
-                    CreatedDate = b.CreatedDate,
-                };
-
-                invoice.InvoiceLines.Add(new InvoiceLine
-                {
-                    InvoiceLineId = Guid.NewGuid(),
-                    InvoiceId = invoice.InvoiceId,
-                    Description = $"Media Campaign Deliverable Execution ({b.BookingNumber})",
-                    Quantity = 1,
-                    UnitPrice = invoice.Subtotal,
-                    LineTotal = invoice.Subtotal,
-                    TaxRate = 18,
-                    SortOrder = 1,
-                });
-
-                _context.Invoices.Add(invoice);
-            }
-
-            if (_context.ChangeTracker.HasChanges())
-            {
-                await _context.SaveChangesAsync();
-            }
-
             var query = _context.Invoices
                 .Include(i => i.Booking)
                 .Include(i => i.Advertiser)
@@ -161,37 +112,6 @@ namespace AdsConnect.data.Repository
 
         public async Task<List<PaymentDto>> GetPaymentsService(Guid userId, string role)
         {
-            var paidInvoices = await _context.Invoices
-                .Include(i => i.Payments)
-                .Where(i => i.Status == "Paid" && !i.Payments.Any())
-                .ToListAsync();
-
-            foreach (var inv in paidInvoices)
-            {
-                var payment = new Payment
-                {
-                    PaymentId = Guid.NewGuid(),
-                    InvoiceId = inv.InvoiceId,
-                    BookingId = inv.BookingId,
-                    Direction = "AdvertiserToPlatform",
-                    Amount = inv.TotalAmount ?? (inv.Subtotal + inv.TaxAmount),
-                    Currency = inv.Currency ?? "INR",
-                    PaymentMethod = "UPI",
-                    Gateway = "Razorpay",
-                    TransactionReference = $"pay_{Guid.NewGuid():N}"[..18],
-                    GatewayPayload = "{}",
-                    Status = "Completed",
-                    PaymentDate = inv.PaidDate ?? inv.CreatedDate,
-                    CreatedDate = inv.CreatedDate,
-                };
-                _context.Payments.Add(payment);
-            }
-
-            if (_context.ChangeTracker.HasChanges())
-            {
-                await _context.SaveChangesAsync();
-            }
-
             var query = _context.Payments
                 .Include(p => p.Invoice)
                 .Include(p => p.Booking)
@@ -224,7 +144,7 @@ namespace AdsConnect.data.Repository
                 bookingNumber = p.Booking?.BookingNumber ?? string.Empty,
                 amount = p.Amount,
                 currency = p.Currency,
-                paymentMethod = p.PaymentMethod ?? "UPI",
+                paymentMethod = p.PaymentMethod ?? string.Empty,
                 transactionReference = p.TransactionReference ?? string.Empty,
                 status = p.Status,
                 paymentDate = p.PaymentDate?.ToString("yyyy-MM-dd HH:mm") ?? p.CreatedDate.ToString("yyyy-MM-dd HH:mm"),
@@ -234,55 +154,6 @@ namespace AdsConnect.data.Repository
 
         public async Task<List<CommissionRuleDto>> GetCommissionRulesService()
         {
-            var ruleCount = await _context.CommissionRules.CountAsync();
-            if (ruleCount == 0)
-            {
-                var ch = await _context.AdvertisingChannels.FirstOrDefaultAsync();
-                var pt = await _context.ProviderTypes.FirstOrDefaultAsync();
-
-                _context.CommissionRules.AddRange(
-                    new CommissionRule
-                    {
-                        CommissionRuleId = Guid.NewGuid(),
-                        Scope = "Global",
-                        PercentageRate = 10.0m,
-                        FixedAmount = 0m,
-                        Currency = "INR",
-                        Priority = 10,
-                        IsActive = true,
-                        EffectiveFrom = DateTime.UtcNow,
-                        CreatedDate = DateTime.UtcNow,
-                    },
-                    new CommissionRule
-                    {
-                        CommissionRuleId = Guid.NewGuid(),
-                        Scope = "Channel",
-                        ChannelId = ch?.ChannelId,
-                        PercentageRate = 12.5m,
-                        FixedAmount = 50m,
-                        Currency = "INR",
-                        Priority = 20,
-                        IsActive = true,
-                        EffectiveFrom = DateTime.UtcNow,
-                        CreatedDate = DateTime.UtcNow,
-                    },
-                    new CommissionRule
-                    {
-                        CommissionRuleId = Guid.NewGuid(),
-                        Scope = "ProviderType",
-                        ProviderTypeId = pt?.ProviderTypeId,
-                        PercentageRate = 15.0m,
-                        FixedAmount = 100m,
-                        Currency = "INR",
-                        Priority = 30,
-                        IsActive = true,
-                        EffectiveFrom = DateTime.UtcNow,
-                        CreatedDate = DateTime.UtcNow,
-                    }
-                );
-                await _context.SaveChangesAsync();
-            }
-
             var rules = await _context.CommissionRules
                 .Include(r => r.Channel)
                 .Include(r => r.ProviderType)
@@ -355,8 +226,10 @@ namespace AdsConnect.data.Repository
                 Action = "CREATE",
                 OldValues = null,
                 NewValues = JsonSerializer.Serialize(new { scope = rule.Scope, percentageRate = rule.PercentageRate, fixedAmount = rule.FixedAmount, priority = rule.Priority, isActive = rule.IsActive }),
-                IpAddress = IPAddress.Parse("127.0.0.1"),
-                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AdsConnectAdmin/2.4",
+                // No request context reaches this layer, so the caller's IP and user
+                // agent are unknown; they are left empty rather than invented.
+                IpAddress = null,
+                UserAgent = null,
                 CreatedDate = DateTime.UtcNow
             });
 
@@ -382,73 +255,10 @@ namespace AdsConnect.data.Repository
             });
         }
 
-        public async Task<(bool paid, string message, PaymentDto? payment)> PayInvoiceService(Guid userId, PayInvoiceDto dto)
-        {
-            var invoice = await _context.Invoices
-                .Include(i => i.Booking)
-                .FirstOrDefaultAsync(i => i.InvoiceId == dto.invoiceId);
-
-            if (invoice == null)
-            {
-                return (false, "Invoice not found", null);
-            }
-
-            var oldStatus = invoice.Status;
-            invoice.Status = "Paid";
-            invoice.AmountPaid = invoice.TotalAmount ?? (invoice.Subtotal + invoice.TaxAmount);
-            invoice.PaidDate = DateTime.UtcNow;
-
-            var payment = new Payment
-            {
-                PaymentId = Guid.NewGuid(),
-                InvoiceId = invoice.InvoiceId,
-                BookingId = invoice.BookingId,
-                Direction = "AdvertiserToPlatform",
-                Amount = invoice.AmountPaid,
-                Currency = invoice.Currency,
-                PaymentMethod = dto.paymentMethod,
-                Gateway = dto.paymentMethod,
-                TransactionReference = $"tx_{Guid.NewGuid():N}"[..18],
-                GatewayPayload = "{}",
-                Status = "Completed",
-                PaymentDate = DateTime.UtcNow,
-                CreatedDate = DateTime.UtcNow,
-            };
-
-            _context.Payments.Add(payment);
-
-            _context.AuditLogs.Add(new AuditLog
-            {
-                AuditLogId = Guid.NewGuid(),
-                UserId = userId,
-                UserRole = "Admin",
-                EntityName = "Invoice",
-                EntityId = invoice.InvoiceId,
-                Action = "PAYMENT",
-                OldValues = JsonSerializer.Serialize(new { status = oldStatus }),
-                NewValues = JsonSerializer.Serialize(new { status = invoice.Status, amountPaid = invoice.AmountPaid, paymentMethod = dto.paymentMethod, txRef = payment.TransactionReference }),
-                IpAddress = IPAddress.Parse("127.0.0.1"),
-                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AdsConnectAdmin/2.4",
-                CreatedDate = DateTime.UtcNow
-            });
-
-            await _context.SaveChangesAsync();
-
-            return (true, "Payment processed successfully", new PaymentDto
-            {
-                id = payment.PaymentId,
-                paymentNumber = $"PAY-{payment.PaymentId.ToString("N")[..8].ToUpper()}",
-                invoiceId = invoice.InvoiceId,
-                invoiceNumber = invoice.InvoiceNumber,
-                bookingId = invoice.BookingId,
-                bookingNumber = invoice.Booking?.BookingNumber ?? string.Empty,
-                amount = payment.Amount,
-                currency = payment.Currency,
-                paymentMethod = payment.PaymentMethod,
-                transactionReference = payment.TransactionReference,
-                status = payment.Status,
-                paymentDate = payment.PaymentDate?.ToString("yyyy-MM-dd HH:mm") ?? DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm"),
-            });
-        }
+        // There is no payment gateway integration yet, so an invoice cannot be paid
+        // online. Refusing here (rather than marking the invoice Paid and inventing a
+        // Payment row and transaction reference) keeps the ledger to real money only.
+        public Task<(bool paid, string message, PaymentDto? payment)> PayInvoiceService(Guid userId, PayInvoiceDto dto) =>
+            Task.FromResult<(bool paid, string message, PaymentDto? payment)>((false, "Online payment is not available yet", null));
     }
 }
